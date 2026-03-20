@@ -41,7 +41,7 @@ Create a `docker-compose.yml` file and run `docker-compose up -d`:
 ```yaml
 services:
   upgradarr:
-    image: nullify9682
+    image: nullify9682/upgradarr:latest
     container_name: upgradarr
     restart: unless-stopped
     environment:
