@@ -22,11 +22,11 @@ The script requires a `config.yml` file located in the `/config` volume of the c
 ### File Structure
 ```yaml
 radarr:
-  url: "[http://192.168.1.100:7878](http://192.168.1.100:7878)"  # The full URL to your Radarr instance
+  url: "http://192.168.1.100:7878"  # The full URL to your Radarr instance
   api_key: "YOUR_RADARR_API_KEY"    # Found in Settings > General
 
 sonarr:
-  url: "[http://192.168.1.100:8989](http://192.168.1.100:8989)"  # The full URL to your Sonarr instance
+  url: "http://192.168.1.100:8989"  # The full URL to your Sonarr instance
   api_key: "YOUR_SONARR_API_KEY"    # Found in Settings > General
 
 settings:
@@ -47,7 +47,7 @@ Create a `docker-compose.yml` file and run `docker-compose up -d`:
 ```yaml
 services:
   upgradarr:
-    image: upgradarr:latest
+    image: nullify9682/upgradarr:latest
     container_name: upgradarr
     restart: unless-stopped
     volumes:
