@@ -1,13 +1,27 @@
 FROM python:3.12-slim
 
-# Installe requests
-RUN pip install --no-cache-dir requests
+# Install system dependencies for dynamic UID/GID and TZ support
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gosu \
+    passwd \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
-# Non-root user
-RUN useradd -m -u 1000 appuser
+# Create the user and group with default IDs
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup -m appuser
+
+# Create config folder at root
+RUN mkdir /config
+
 WORKDIR /app
 COPY upgradarr.py .
-RUN chown -R appuser:appuser /app
-USER appuser
+COPY requirements.txt .
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
-CMD ["python3", "upgradarr.py"]
+# Make entrypoint executable
+RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Start as root to allow entrypoint.sh to change IDs
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
