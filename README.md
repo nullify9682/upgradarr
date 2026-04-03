@@ -32,6 +32,7 @@ sonarr:
 settings:
   sleep_time: 300       # Seconds to wait between each search (Default: 5 mins)
   cache_duration: 86400 # Seconds before refreshing the library list (Default: 24h)
+```
 
 ---
 
@@ -55,3 +56,4 @@ services:
       - PUID=1000         # The UID of the user owning the config folder
       - PGID=1000         # The GID of the user owning the config folder
       - TZ=Europe/Paris   # Sets the correct time for logs
+```
