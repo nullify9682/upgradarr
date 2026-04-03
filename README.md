@@ -15,18 +15,23 @@ If you have a massive library (e.g., 3000+ items), triggering a full search can 
 
 ---
 
-## ⚙️ Environment Variables
+## ⚙️ Configuration (`config.yml`)
 
-You must configure the script using the following environment variables:
+The script requires a `config.yml` file located in the `/config` volume of the container. If the file does not exist, the container will generate a default one and exit so you can fill it out.
 
-| Variable | Description | Required | Default |
-| :--- | :--- | :---: | :--- |
-| `RADARR_URL` | The full URL to your Radarr instance (e.g., `http://192.168.1.10:7878`). | **Yes** | `http://localhost:7878` |
-| `RADARR_API_KEY` | Your Radarr API Key (found in Settings > General). | **Yes** | None |
-| `SONARR_URL` | The full URL to your Sonarr instance (e.g., `http://192.168.1.10:8989`). | **Yes** | `http://localhost:8989` |
-| `SONARR_API_KEY` | Your Sonarr API Key (found in Settings > General). | **Yes** | None |
-| `SLEEP_TIME` | Time in seconds to pause between each search. | No | `300` (5 mins) |
-| `CACHE_DURATION` | Time in seconds before refreshing the library list from the APIs. | No | `86400` (24h) |
+### File Structure
+```yaml
+radarr:
+  url: "[http://192.168.1.100:7878](http://192.168.1.100:7878)"  # The full URL to your Radarr instance
+  api_key: "YOUR_RADARR_API_KEY"    # Found in Settings > General
+
+sonarr:
+  url: "[http://192.168.1.100:8989](http://192.168.1.100:8989)"  # The full URL to your Sonarr instance
+  api_key: "YOUR_SONARR_API_KEY"    # Found in Settings > General
+
+settings:
+  sleep_time: 300       # Seconds to wait between each search (Default: 5 mins)
+  cache_duration: 86400 # Seconds before refreshing the library list (Default: 24h)
 
 ---
 
@@ -41,12 +46,12 @@ Create a `docker-compose.yml` file and run `docker-compose up -d`:
 ```yaml
 services:
   upgradarr:
-    image: nullify9682/upgradarr:latest
+    image: upgradarr:latest
     container_name: upgradarr
     restart: unless-stopped
+    volumes:
+      - ./config:/config
     environment:
-      - RADARR_URL=[http://192.168.1.100:7878](http://192.168.1.100:7878)
-      - RADARR_API_KEY=your_radarr_api_key_here
-      - SONARR_URL=[http://192.168.1.100:8989](http://192.168.1.100:8989)
-      - SONARR_API_KEY=your_sonarr_api_key_here
-      - SLEEP_TIME=300
+      - PUID=1000         # The UID of the user owning the config folder
+      - PGID=1000         # The GID of the user owning the config folder
+      - TZ=Europe/Paris   # Sets the correct time for logs
