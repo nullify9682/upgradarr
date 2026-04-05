@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 import requests
-import time
 import os
 import sys
 import random
 import json
 import yaml
+import signal
+from threading import Event
 from datetime import datetime
 
 # === File Paths (Mapped via Docker Volume) ===
 CONFIG_FILE = '/config/config.yml'
 HISTORY_FILE = '/config/history.json'
 
+# Event to handle instant shutdown
+shutdown_event = Event()
+
 def log(message):
     """Custom print function to include timestamp for Docker logs."""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     print(f"[{timestamp}] {message}", flush=True)
+
+def handle_shutdown_signal(signum, frame):
+    """Catches SIGTERM/SIGINT and triggers the shutdown event."""
+    log("[*] Stop signal received from Docker. Shutting down immediately...")
+    shutdown_event.set()
 
 def calculate_eta(movie_count, season_count, sleep_time):
     """Calculates a human-readable ETA string."""
@@ -128,6 +137,10 @@ def trigger_sonarr_search(season, cfg):
         log(f"[SONARR-ERROR] Failed to search {season['title']} S{season['season_num']}: {e}")
 
 def main():
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, handle_shutdown_signal)
+    signal.signal(signal.SIGINT, handle_shutdown_signal)
+
     log("=== Upgradarr: Random Library Searcher Started ===")
     config = load_config()
     sleep_time = config['settings'].get('sleep_time', 300)
@@ -141,10 +154,13 @@ def main():
     
     movie_pool, season_pool = [], []
     m_list, s_list = [], []
-    last_fetch_time, last_status_time = 0, time.time()
+    
+    # We use time.monotonic() which is more reliable for intervals than time.time()
+    import time
+    last_fetch_time, last_status_time = 0, time.monotonic()
 
-    while True:
-        current_time = time.time()
+    while not shutdown_event.is_set():
+        current_time = time.monotonic()
         
         # Hourly Status Update
         if current_time - last_status_time >= 3600:
@@ -159,13 +175,14 @@ def main():
             
             if m_list is None or s_list is None:
                 log("[WARNING] API Unreachable. Retrying in 60s...")
-                time.sleep(60); continue
+                if shutdown_event.wait(60): # Wait 60s, break immediately if signal received
+                    break
+                continue
                 
             last_fetch_time = current_time
             movie_pool = [m for m in m_list if m['id'] not in searched_movies]
             season_pool = [s for s in s_list if s['uid'] not in searched_seasons]
             
-            # Initial ETA after sync
             initial_eta = calculate_eta(len(movie_pool), len(season_pool), sleep_time)
             log(f"[*] Sync complete: {len(movie_pool)} items remaining to search.")
             log(f"[*] Estimated time to finish current cycle: ~{initial_eta}")
@@ -180,7 +197,9 @@ def main():
                 log(f"[*] New cycle started. ETA: ~{reset_eta}")
             else:
                 log("[-] No monitored items found. Checking again in 60s...")
-                time.sleep(60); continue
+                if shutdown_event.wait(60):
+                    break
+                continue
 
         # Search Logic
         apps = ([('radarr', movie_pool)] if movie_pool else []) + ([('sonarr', season_pool)] if season_pool else [])
@@ -191,14 +210,15 @@ def main():
             else: trigger_sonarr_search(item, config['sonarr']); searched_seasons.add(item['uid'])
             save_history(searched_movies, searched_seasons)
             
-        time.sleep(sleep_time)
+        # Wait for the next search loop, but instantly break if shutdown is requested
+        if shutdown_event.wait(sleep_time):
+            break
+
+    log("[*] Script has exited safely.")
 
 if __name__ == "__main__":
     try:
         main()
-    except KeyboardInterrupt:
-        log("\n[*] Script manually stopped by user. Exiting...")
-        sys.exit(0)
     except Exception as e:
         log(f"\n[CRITICAL ERROR] The script crashed: {e}")
         sys.exit(1)
