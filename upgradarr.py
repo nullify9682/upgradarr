@@ -156,6 +156,14 @@ def trigger_sonarr_search(season, cfg):
             else:
                 log(f"[SONARR-ERROR] Final failure for {season['title']} S{season['season_num']} after 6 attempts: {e}")
 
+def update_healthcheck():
+    """Touches a file to signal the container is alive."""
+    try:
+        with open('/tmp/healthy', 'w') as f:
+            f.write(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    except:
+        pass
+
 def main():
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, handle_shutdown_signal)
@@ -180,6 +188,7 @@ def main():
     last_fetch_time, last_status_time = 0, time.monotonic()
 
     while not shutdown_event.is_set():
+        update_healthcheck()
         current_time = time.monotonic()
         
         # Hourly Status Update
@@ -232,7 +241,8 @@ def main():
             else: 
                 trigger_sonarr_search(item, config['sonarr'])
                 searched_seasons.add(item['uid'])
-            
+                
+            update_healthcheck()
             save_history(searched_movies, searched_seasons)
             
         # Wait for the next search loop, but instantly break if shutdown is requested

@@ -23,5 +23,8 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 RUN pip install --no-cache-dir -r requirements.txt
 
+HEALTHCHECK --interval=1m --timeout=10s --start-period=30s --retries=3 \
+  CMD test $(find /tmp/healthy -mmin -10) || exit 1
+
 # Start as root to allow entrypoint.sh to change IDs
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
