@@ -123,18 +123,38 @@ def fetch_sonarr_library(cfg):
         return None
 
 def trigger_radarr_search(movie, cfg):
-    try:
-        requests.post(f"{cfg['url']}/api/v3/command", json={"name": "MoviesSearch", "movieIds": [movie['id']]}, headers=get_headers(cfg['api_key']), timeout=10).raise_for_status()
-        log(f"[RADARR] Search triggered for: {movie['title']}")
-    except Exception as e:
-        log(f"[RADARR-ERROR] Failed to search {movie['title']}: {e}")
+    for attempt in range(1, 7):
+        try:
+            requests.post(f"{cfg['url']}/api/v3/command", json={"name": "MoviesSearch", "movieIds": [movie['id']]}, headers=get_headers(cfg['api_key']), timeout=10).raise_for_status()
+            if attempt > 1:
+                log(f"[RADARR] Search triggered for: {movie['title']} (Success on attempt {attempt})")
+            else:
+                log(f"[RADARR] Search triggered for: {movie['title']}")
+            return # Sortir de la fonction si succès
+        except Exception as e:
+            if attempt < 6:
+                log(f"[RADARR-WARNING] Search failed for {movie['title']} (Attempt {attempt}/6). Retrying in 60s...")
+                if shutdown_event.wait(60): # Attente interruptible de 60s
+                    break # Annuler les retentatives si le conteneur s'arrête
+            else:
+                log(f"[RADARR-ERROR] Final failure for {movie['title']} after 6 attempts: {e}")
 
 def trigger_sonarr_search(season, cfg):
-    try:
-        requests.post(f"{cfg['url']}/api/v3/command", json={"name": "SeasonSearch", "seriesId": season['series_id'], "seasonNumber": season['season_num']}, headers=get_headers(cfg['api_key']), timeout=10).raise_for_status()
-        log(f"[SONARR] Search triggered for: {season['title']} (Season {season['season_num']})")
-    except Exception as e:
-        log(f"[SONARR-ERROR] Failed to search {season['title']} S{season['season_num']}: {e}")
+    for attempt in range(1, 7):
+        try:
+            requests.post(f"{cfg['url']}/api/v3/command", json={"name": "SeasonSearch", "seriesId": season['series_id'], "seasonNumber": season['season_num']}, headers=get_headers(cfg['api_key']), timeout=10).raise_for_status()
+            if attempt > 1:
+                log(f"[SONARR] Search triggered for: {season['title']} (Season {season['season_num']}) (Success on attempt {attempt})")
+            else:
+                log(f"[SONARR] Search triggered for: {season['title']} (Season {season['season_num']})")
+            return # Sortir de la fonction si succès
+        except Exception as e:
+            if attempt < 6:
+                log(f"[SONARR-WARNING] Search failed for {season['title']} S{season['season_num']} (Attempt {attempt}/6). Retrying in 60s...")
+                if shutdown_event.wait(60): # Attente interruptible de 60s
+                    break # Annuler les retentatives si le conteneur s'arrête
+            else:
+                log(f"[SONARR-ERROR] Final failure for {season['title']} S{season['season_num']} after 6 attempts: {e}")
 
 def main():
     # Register signal handlers for graceful shutdown
@@ -206,8 +226,13 @@ def main():
         if apps:
             app_type, pool = random.choice(apps)
             item = pool.pop(random.randrange(len(pool)))
-            if app_type == 'radarr': trigger_radarr_search(item, config['radarr']); searched_movies.add(item['id'])
-            else: trigger_sonarr_search(item, config['sonarr']); searched_seasons.add(item['uid'])
+            if app_type == 'radarr': 
+                trigger_radarr_search(item, config['radarr'])
+                searched_movies.add(item['id'])
+            else: 
+                trigger_sonarr_search(item, config['sonarr'])
+                searched_seasons.add(item['uid'])
+            
             save_history(searched_movies, searched_seasons)
             
         # Wait for the next search loop, but instantly break if shutdown is requested
